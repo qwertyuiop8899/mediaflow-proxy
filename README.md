@@ -972,6 +972,116 @@ For IPTV streams where the playlist format (m3u/m3u_plus) cannot be reliably det
 http://localhost:8888/proxy/hls/manifest.m3u8?d=https://iptv.provider.com/playlist&force_playlist_proxy=true&api_password=your_password
 ```
 
+# Base64 URL Support Documentation
+
+## Overview
+
+MediaFlow Proxy ora supporta la decodifica automatica degli URL codificati in base64. Questa funzionalità è utile quando si vogliono nascondere gli URL originali o aggirare certe restrizioni.
+
+## Come funziona
+
+Quando viene aggiunto il parametro `b64` alla query string, il proxy riconosce automaticamente che l'URL nel parametro `d` è codificato in base64 e lo decodifica prima di elaborarlo.
+
+## Supporto negli endpoint
+
+La funzionalità `b64` è disponibile in tutti gli endpoint principali:
+
+- ✅ `/hls/manifest.m3u8` - Manifest HLS 
+- ✅ `/hls/segment` - Segmenti HLS
+- ✅ `/dash/segment` - Segmenti DASH
+- ✅ `/mpd/manifest.m3u8` - Manifest MPD convertito in HLS
+- ✅ `/mpd/playlist.m3u8` - Playlist MPD specifica per profilo
+- ✅ `/stream` - Streaming generico
+- ✅ `/video` - Extractor
+
+## Esempi d'uso
+
+### URL normale (senza base64)
+```
+https://link.proxy.com/proxy/stream?api_password=mfp&d=https://example.com/video.mp4
+```
+
+### URL con base64
+```bash
+# URL originale
+ORIGINAL_URL="https://example.com/video.mp4"
+
+# Codifica in base64
+ENCODED_URL=$(echo -n "$ORIGINAL_URL" | base64)
+
+# Risultato: aHR0cHM6Ly9leGFtcGxlLmNvbS92aWRlby5tcDQ=
+
+# URL del proxy con base64
+https://link.proxy.com/proxy/stream?api_password=mfp&b64&d=aHR0cHM6Ly9leGFtcGxlLmNvbS92aWRlby5tcDQ=
+```
+
+### Esempi specifici per tipo di contenuto
+
+#### HLS Manifest
+```
+# URL normale
+https://link.proxy.com/hls/manifest.m3u8?api_password=mfp&d=https://stream.example.com/playlist.m3u8
+
+# URL base64
+https://link.proxy.com/hls/manifest.m3u8?api_password=mfp&b64&d=aHR0cHM6Ly9zdHJlYW0uZXhhbXBsZS5jb20vcGxheWxpc3QubTN1OA==
+```
+
+#### MPD to HLS
+```
+# URL normale
+https://link.proxy.com/mpd/manifest.m3u8?api_password=mfp&d=https://dash.example.com/manifest.mpd
+
+# URL base64
+https://link.proxy.com/mpd/manifest.m3u8?api_password=mfp&b64&d=aHR0cHM6Ly9kYXNoLmV4YW1wbGUuY29tL21hbmlmZXN0Lm1wZA==
+```
+
+#### Extractor
+```
+# URL normale
+https://link.proxy.com/video?host=Doodstream&api_password=mfp&d=https://doodstream.example.com/video123
+
+# URL base64
+https://link.proxy.com/video?host=Doodstream&api_password=mfp&b64&d=aHR0cHM6Ly9kb29kc3RyZWFtLmV4YW1wbGUuY29tL3ZpZGVvMTIz
+```
+
+## Note tecniche
+
+1. **Parametro b64**: Il parametro può essere presente senza valore (`&b64`) o con un valore (`&b64=true`). La presenza del parametro è sufficiente per attivare la decodifica.
+
+2. **Compatibilità**: Gli URL non codificati continuano a funzionare normalmente. La funzionalità è retrocompatibile al 100%.
+
+3. **Gestione errori**: Se l'URL base64 è malformato, il proxy restituirà un errore HTTP 400 con dettagli specifici.
+
+4. **Logging**: La decodifica viene registrata nei log per debugging (solo primi 50 caratteri dell'URL codificato per sicurezza).
+
+## Codifica base64 da riga di comando
+
+### Linux/macOS
+```bash
+# Codifica
+echo -n "https://example.com/video.mp4" | base64
+
+# Decodifica (per test)
+echo "aHR0cHM6Ly9leGFtcGxlLmNvbS92aWRlby5tcDQ=" | base64 -d
+```
+
+### Windows PowerShell
+```powershell
+# Codifica
+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("https://example.com/video.mp4"))
+
+# Decodifica (per test)  
+[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("aHR0cHM6Ly9leGFtcGxlLmNvbS92aWRlby5tcDQ="))
+```
+
+## Vantaggi
+
+- **Privacy**: Gli URL originali non sono visibili direttamente
+- **Sicurezza**: Riduce l'esposizione degli URL sensibili nei log
+- **Flessibilità**: Permette di aggirare certe restrizioni di caratteri speciali negli URL
+- **Retrocompatibilità**: Non influisce sul funzionamento esistente
+
+
 This parameter bypasses URL-based detection and routing strategy, ensuring consistent behavior for IPTV streams that don't have clear format indicators in their URLs.
 
 ## Future Development
