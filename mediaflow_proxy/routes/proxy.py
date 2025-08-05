@@ -2,6 +2,7 @@ from typing import Annotated
 from urllib.parse import quote, unquote
 import re
 import logging
+import base64
 
 from fastapi import Request, Depends, APIRouter, Query, HTTPException
 from fastapi.responses import Response, RedirectResponse
@@ -24,6 +25,49 @@ from mediaflow_proxy.schemas import (
 from mediaflow_proxy.utils.http_utils import get_proxy_headers, ProxyRequestHeaders
 
 proxy_router = APIRouter()
+
+
+def decode_base64_url(url: str) -> str:
+    """
+    Decode a base64 encoded URL.
+    
+    Args:
+        url (str): The base64 encoded URL to decode.
+        
+    Returns:
+        str: The decoded URL.
+        
+    Raises:
+        HTTPException: If the URL cannot be decoded.
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        # Remove any URL-safe base64 padding if needed
+        decoded_bytes = base64.b64decode(url + '==')  # Add padding to be safe
+        decoded_url = decoded_bytes.decode('utf-8')
+        logger.info(f"Successfully decoded base64 URL: {url[:50]}... -> {decoded_url}")
+        return decoded_url
+    except Exception as e:
+        logger.error(f"Failed to decode base64 URL '{url}': {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid base64 URL: {str(e)}")
+
+
+def process_destination_url(destination: str, is_base64: bool = False) -> str:
+    """
+    Process the destination URL, optionally decoding from base64.
+    
+    Args:
+        destination (str): The destination URL.
+        is_base64 (bool): Whether the URL is base64 encoded.
+        
+    Returns:
+        str: The processed URL.
+    """
+    if is_base64:
+        destination = decode_base64_url(destination)
+    
+    # Apply existing sanitization
+    return sanitize_url(destination)
 
 
 def sanitize_url(url: str) -> str:
@@ -174,8 +218,8 @@ async def hls_manifest_proxy(
     Returns:
         Response: The HTTP response with the processed m3u8 playlist or streamed content.
     """
-    # Sanitize destination URL to fix common encoding issues
-    hls_params.destination = sanitize_url(hls_params.destination)
+    # Process destination URL (decode base64 if needed and sanitize)
+    hls_params.destination = process_destination_url(hls_params.destination, hls_params.b64)
     
     # Check if destination contains stream-{numero} pattern and redirect to extractor
     redirect_response = _check_and_redirect_dlhd_stream(request, hls_params.destination)
@@ -190,6 +234,7 @@ async def hls_segment_proxy(
     request: Request,
     proxy_headers: Annotated[ProxyRequestHeaders, Depends(get_proxy_headers)],
     segment_url: str = Query(..., description="URL of the HLS segment"),
+    b64: bool | None = Query(None, description="Whether the segment URL is base64 encoded and needs to be decoded."),
 ):
     """
     Proxy HLS segments with optional pre-buffering support.
@@ -197,6 +242,7 @@ async def hls_segment_proxy(
     Args:
         request (Request): The incoming HTTP request.
         segment_url (str): URL of the HLS segment to proxy.
+        b64 (bool | None): Whether the segment URL is base64 encoded and needs to be decoded.
         proxy_headers (ProxyRequestHeaders): The headers to include in the request.
 
     Returns:
@@ -205,8 +251,8 @@ async def hls_segment_proxy(
     from mediaflow_proxy.utils.hls_prebuffer import hls_prebuffer
     from mediaflow_proxy.configs import settings
     
-    # Sanitize segment URL to fix common encoding issues
-    segment_url = sanitize_url(segment_url)
+    # Process segment URL (decode base64 if needed and sanitize)
+    segment_url = process_destination_url(segment_url, b64)
     
     # Extract headers for pre-buffering
     headers = {}
@@ -237,6 +283,7 @@ async def dash_segment_proxy(
     request: Request,
     proxy_headers: Annotated[ProxyRequestHeaders, Depends(get_proxy_headers)],
     segment_url: str = Query(..., description="URL of the DASH segment"),
+    b64: bool | None = Query(None, description="Whether the segment URL is base64 encoded and needs to be decoded."),
 ):
     """
     Proxy DASH segments with optional pre-buffering support.
@@ -244,6 +291,7 @@ async def dash_segment_proxy(
     Args:
         request (Request): The incoming HTTP request.
         segment_url (str): URL of the DASH segment to proxy.
+        b64 (bool | None): Whether the segment URL is base64 encoded and needs to be decoded.
         proxy_headers (ProxyRequestHeaders): The headers to include in the request.
 
     Returns:
@@ -252,8 +300,8 @@ async def dash_segment_proxy(
     from mediaflow_proxy.utils.dash_prebuffer import dash_prebuffer
     from mediaflow_proxy.configs import settings
     
-    # Sanitize segment URL to fix common encoding issues
-    segment_url = sanitize_url(segment_url)
+    # Process segment URL (decode base64 if needed and sanitize)
+    segment_url = process_destination_url(segment_url, b64)
     
     # Extract headers for pre-buffering
     headers = {}
@@ -287,6 +335,7 @@ async def proxy_stream_endpoint(
     request: Request,
     proxy_headers: Annotated[ProxyRequestHeaders, Depends(get_proxy_headers)],
     destination: str = Query(..., description="The URL of the stream.", alias="d"),
+    b64: bool | None = Query(None, description="Whether the destination URL is base64 encoded and needs to be decoded."),
     filename: str | None = None,
 ):
     """
@@ -296,13 +345,14 @@ async def proxy_stream_endpoint(
         request (Request): The incoming HTTP request.
         proxy_headers (ProxyRequestHeaders): The headers to include in the request.
         destination (str): The URL of the stream to be proxied.
+        b64 (bool | None): Whether the destination URL is base64 encoded and needs to be decoded.
         filename (str | None): The filename to be used in the response headers.
 
     Returns:
         Response: The HTTP response with the streamed content.
     """
-    # Sanitize destination URL to fix common encoding issues
-    destination = sanitize_url(destination)
+    # Process destination URL (decode base64 if needed and sanitize)
+    destination = process_destination_url(destination, b64)
     
     # Check if destination contains stream-{numero} pattern and redirect to extractor
     redirect_response = _check_and_redirect_dlhd_stream(request, destination)
@@ -359,8 +409,8 @@ async def mpd_manifest_proxy(
     if extracted_key and not manifest_params.key:
         manifest_params.key = extracted_key
     
-    # Sanitize destination URL to fix common encoding issues
-    manifest_params.destination = sanitize_url(manifest_params.destination)
+    # Process destination URL (decode base64 if needed and sanitize)
+    manifest_params.destination = process_destination_url(manifest_params.destination, manifest_params.b64)
     
     return await get_manifest(request, manifest_params, proxy_headers)
 
@@ -394,8 +444,8 @@ async def playlist_endpoint(
     if extracted_key and not playlist_params.key:
         playlist_params.key = extracted_key
     
-    # Sanitize destination URL to fix common encoding issues
-    playlist_params.destination = sanitize_url(playlist_params.destination)
+    # Process destination URL (decode base64 if needed and sanitize)
+    playlist_params.destination = process_destination_url(playlist_params.destination, playlist_params.b64)
     
     return await get_playlist(request, playlist_params, proxy_headers)
 
