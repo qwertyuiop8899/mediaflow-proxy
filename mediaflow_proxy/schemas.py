@@ -60,6 +60,10 @@ class GenericParams(BaseModel):
 
 class HLSManifestParams(GenericParams):
     destination: str = Field(..., description="The URL of the HLS manifest.", alias="d")
+    b64: Optional[bool] = Field(
+        None,
+        description="Whether the destination URL is base64 encoded and needs to be decoded."
+    )
     key_url: Optional[str] = Field(
         None,
         description="The HLS Key URL to replace the original key URL. Defaults to None. (Useful for bypassing some sneaky protection)",
@@ -72,12 +76,20 @@ class HLSManifestParams(GenericParams):
 
 class MPDManifestParams(GenericParams):
     destination: str = Field(..., description="The URL of the MPD manifest.", alias="d")
+    b64: Optional[bool] = Field(
+        None,
+        description="Whether the destination URL is base64 encoded and needs to be decoded."
+    )
     key_id: Optional[str] = Field(None, description="The DRM key ID (optional).")
     key: Optional[str] = Field(None, description="The DRM key (optional).")
 
 
 class MPDPlaylistParams(GenericParams):
     destination: str = Field(..., description="The URL of the MPD manifest.", alias="d")
+    b64: Optional[bool] = Field(
+        None,
+        description="Whether the destination URL is base64 encoded and needs to be decoded."
+    )
     profile_id: str = Field(..., description="The profile ID to generate the playlist for.")
     key_id: Optional[str] = Field(None, description="The DRM key ID (optional).")
     key: Optional[str] = Field(None, description="The DRM key (optional).")
@@ -96,6 +108,10 @@ class ExtractorURLParams(GenericParams):
         "Doodstream", "Mixdrop", "Uqload", "Streamtape", "Supervideo", "VixCloud", "Okru", "Maxstream", "LiveTV", "DLHD", "Fastream"
     ] = Field(..., description="The host to extract the URL from.")
     destination: str = Field(..., description="The URL of the stream.", alias="d")
+    b64: Optional[bool] = Field(
+        None,
+        description="Whether the destination URL is base64 encoded and needs to be decoded."
+    )
     redirect_stream: bool = Field(False, description="Whether to redirect to the stream endpoint automatically.")
     extra_params: Dict[str, Any] = Field(
         default_factory=dict,
