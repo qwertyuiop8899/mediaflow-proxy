@@ -43,11 +43,15 @@ else:
   print('[start] All core Python modules present in venv')
 PY
 
-# If critical modules missing, attempt a targeted install (best-effort)
+# If critical modules missing, attempt a targeted install (best-effort). Avoid importlib.util to prevent failures.
 MISSING=$(poetry run python - <<'PY'
-import importlib
 mods = ['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']
-missing=[m for m in mods if not __import__('importlib').util.find_spec(m)]
+missing=[]
+for m in mods:
+  try:
+    __import__(m)
+  except Exception:
+    missing.append(m)
 print(' '.join(missing))
 PY
 )
