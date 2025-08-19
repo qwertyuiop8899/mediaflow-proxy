@@ -5,6 +5,9 @@ set -euo pipefail
 
 PORT="${PORT:-8888}"
 WORKERS="${WORKERS:-4}"
+GRACEFUL_TIMEOUT="${GRACEFUL_TIMEOUT:-30}"
+KEEPALIVE="${KEEPALIVE:-2}"
+WORKER_TMP_DIR="${WORKER_TMP_DIR:-/dev/shm}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 TIMEOUT="${TIMEOUT:-120}"
 MAX_REQUESTS="${MAX_REQUESTS:-500}"
@@ -61,8 +64,11 @@ exec gunicorn mediaflow_proxy.main:app \
   -k uvicorn.workers.UvicornWorker \
   --bind "0.0.0.0:${PORT}" \
   --timeout "${TIMEOUT}" \
+  --graceful-timeout "${GRACEFUL_TIMEOUT}" \
   --max-requests "${MAX_REQUESTS}" \
   --max-requests-jitter "${MAX_REQUESTS_JITTER}" \
+  --keep-alive "${KEEPALIVE}" \
+  --worker-tmp-dir "${WORKER_TMP_DIR}" \
   --log-level "${LOG_LEVEL}" \
   --access-logfile - \
   --error-logfile - \
