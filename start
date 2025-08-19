@@ -19,9 +19,15 @@ if [ ! -d ".venv" ]; then
   poetry install --no-interaction --no-ansi --only main --no-root
 fi
 
-# Quick module verification (non-fatal)
-python - <<'PY' || true
-import importlib, sys
+# Ensure we use the virtualenv python for all following operations (avoid system python)
+if [ -d ".venv/bin" ]; then
+  export VIRTUAL_ENV="$(pwd)/.venv"
+  export PATH="$VIRTUAL_ENV/bin:$PATH"
+fi
+
+# Quick module verification (non-fatal) using poetry run to guarantee venv context
+poetry run python - <<'PY' || true
+import importlib
 mods = [
   'fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil'
 ]
@@ -32,10 +38,32 @@ for m in mods:
   except Exception as e:
     missing.append(f"{m}:{e}")
 if missing:
-  print('[start][WARN] Missing modules (continuo comunque):', ', '.join(missing))
+  print('[start][WARN] Missing modules in venv (continuo comunque):', ', '.join(missing))
 else:
-  print('[start] All core Python modules present')
+  print('[start] All core Python modules present in venv')
 PY
+
+# If critical modules missing, attempt a targeted install (best-effort)
+MISSING=$(poetry run python - <<'PY'
+import importlib
+mods = ['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']
+missing=[m for m in mods if not __import__('importlib').util.find_spec(m)]
+print(' '.join(missing))
+PY
+)
+if [ -n "$MISSING" ]; then
+  echo "[start] Attempting to install missing modules: $MISSING"
+  # Map bs4 -> beautifulsoup4, pydantic_settings -> pydantic-settings
+  FIXED=""
+  for pkg in $MISSING; do
+    case "$pkg" in
+      bs4) FIXED+=" beautifulsoup4";;
+      pydantic_settings) FIXED+=" pydantic-settings";;
+      *) FIXED+=" $pkg";;
+    esac
+  done
+  poetry run pip install --no-cache-dir $FIXED || echo "[start] Fallback install encountered errors"
+fi
 
 # If a password is set for API auth, hide it from logs
 if [ -n "${API_PASSWORD:-}" ]; then
