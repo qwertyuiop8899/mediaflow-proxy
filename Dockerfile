@@ -72,7 +72,16 @@ USER mediaflow_proxy
 
 # Healthcheck (optional – attempts root path)
 # NOTE: Must be a single line; previous multi-line broke parsing.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 CMD python -c "import os,urllib.request;port=os.getenv('PORT','8888');urllib.request.urlopen(f'http://127.0.0.1:{port}/proxy').read();print('OK')" 2>/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 CMD python -c "import os,urllib.request,sys;port=os.getenv('PORT','8888');
+import urllib.error
+try:
+    urllib.request.urlopen(f'http://127.0.0.1:{port}/health',timeout=4).read();print('OK')
+except urllib.error.HTTPError as e:
+    # Consider any 2xx/3xx a pass
+    print('status',e.code);\
+    sys.exit(0) if 200 <= e.code < 400 else sys.exit(1)
+except Exception as e:
+    print('ERR',e);sys.exit(1)" 2>/dev/null || exit 1
 
 # Use dedicated start script; also copy a convenience symlink to /start for some PaaS
 USER root
