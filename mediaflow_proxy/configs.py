@@ -57,7 +57,7 @@ class TransportConfig(BaseSettings):
 
 
 class Settings(BaseSettings):
-    api_password: str | None = None  # The password for protecting the API endpoints.
+    api_password: str | None = None  # The password for protecting the API endpoints. Default enforced to 'mfp' if not set.
     log_level: str = "INFO"  # The logging level to use.
     transport_config: TransportConfig = Field(default_factory=TransportConfig)  # Configuration for httpx transport.
     enable_streaming_progress: bool = False  # Whether to enable streaming progress tracking.
@@ -89,3 +89,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Enforce a default password if none provided via env / .env for basic protection.
+if not settings.api_password:
+    # Mutate for runtime usage only; avoid persisting to env automatically
+    settings.api_password = "mfp"
+    try:
+        import logging
+        logging.getLogger(__name__).warning("[config] No API password provided; defaulting to 'mfp'. Set API_PASSWORD to override.")
+    except Exception:
+        print("[config] No API password provided; defaulting to 'mfp'. Set API_PASSWORD to override.")
