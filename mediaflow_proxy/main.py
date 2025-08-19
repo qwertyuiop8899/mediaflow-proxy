@@ -2,7 +2,7 @@ import asyncio
 import logging
 from importlib import resources
 
-from fastapi import FastAPI, Depends, Security, HTTPException
+from fastapi import FastAPI, Depends, Security, HTTPException, Request
 from fastapi.security import APIKeyQuery, APIKeyHeader
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
@@ -29,6 +29,24 @@ app.add_middleware(
 )
 app.add_middleware(EncryptionMiddleware)
 app.add_middleware(UIAccessControlMiddleware)
+
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    # Ensure wildcard CORS header always present for browsers that do not accept Vary logic
+    if request.method == "OPTIONS":
+        # Simple fast path preflight response
+        from starlette.responses import Response
+        resp = Response(status_code=204)
+        resp.headers.update({
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+            "Access-Control-Allow-Headers": request.headers.get("Access-Control-Request-Headers", "*"),
+            "Access-Control-Max-Age": "600",
+        })
+        return resp
+    response = await call_next(request)
+    response.headers.setdefault("Access-Control-Allow-Origin", "*")
+    return response
 
 
 async def verify_api_key(api_key: str = Security(api_password_query), api_key_alt: str = Security(api_password_header)):
