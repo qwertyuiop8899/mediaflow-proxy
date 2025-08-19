@@ -4,6 +4,7 @@ FROM python:3.13.5-slim
 ENV PYTHONDONTWRITEBYTECODE="1"
 ENV PYTHONUNBUFFERED="1"
 ENV PORT="8888"
+ENV API_PASSWORD="mfp"
 
 # Set work directory
 WORKDIR /mediaflow_proxy
