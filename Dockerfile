@@ -34,5 +34,13 @@ COPY --chown=mediaflow_proxy:mediaflow_proxy . /mediaflow_proxy
 # Expose the port the app runs on
 EXPOSE 8888
 
-# Activate virtual environment and run the application with Gunicorn
-CMD ["sh", "-c", "exec poetry run gunicorn mediaflow_proxy.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8888 --timeout 120 --max-requests 500 --max-requests-jitter 200 --access-logfile - --error-logfile - --log-level info --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]
+# Copy start script (added later) and set executable
+COPY --chown=mediaflow_proxy:mediaflow_proxy start /mediaflow_proxy/start
+RUN chmod +x /mediaflow_proxy/start
+
+# Healthcheck (optional – attempts root path)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 CMD python -c "import sys,urllib.request;import os;port=os.getenv('PORT','8888');
+import json;urllib.request.urlopen(f'http://127.0.0.1:{port}/proxy').read();print('OK')" 2>/dev/null || exit 1
+
+# Use dedicated start script so Beamup (or other PaaS expecting /start) can invoke it
+ENTRYPOINT ["/mediaflow_proxy/start"]
