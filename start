@@ -74,6 +74,16 @@ if [ -n "${API_PASSWORD:-}" ]; then
   echo "[start] API auth enabled (API_PASSWORD set)"
 fi
 
+# Some platforms append extra args (e.g., '/start web'); filter unknown positional arguments
+SANITIZED_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    web|/start) # ignore these launcher artifacts
+      ;;
+    *) SANITIZED_ARGS+=("$arg");;
+  esac
+done
+
 # Run gunicorn with uvicorn workers
 exec poetry run gunicorn mediaflow_proxy.main:app \
   -w "${WORKERS}" \
@@ -86,4 +96,4 @@ exec poetry run gunicorn mediaflow_proxy.main:app \
   --access-logfile - \
   --error-logfile - \
   --forwarded-allow-ips "${FORWARDED_ALLOW_IPS}" \
-  "$@"
+  "${SANITIZED_ARGS[@]}"
