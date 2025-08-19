@@ -53,9 +53,9 @@ missing=[m for m in mods if not importlib.util.find_spec(m)]
 if missing:
     print('[build] Missing after pip install:', missing)
     sys.exit(1)
-print('[build] All runtime Python modules present (pip)')
+    print('[build] All runtime Python modules present (pip)')
 PY
-    ; fi
+fi
 
 ## Copy project files
 COPY --chown=mediaflow_proxy:mediaflow_proxy . /mediaflow_proxy
