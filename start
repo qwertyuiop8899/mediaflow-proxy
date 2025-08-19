@@ -17,7 +17,7 @@ echo "[start] mediaflow-proxy (pip mode) starting on port ${PORT}..."
 python - <<'PY' || true
 import importlib
 mods = [
-  'fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil'
+  'fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil','Crypto'
 ]
 missing=[]
 for m in mods:
