@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Simple start wrapper for Beamup / Heroku-like platforms
-# Ensures poetry venv is ready, performs minimal diagnostics, then launches gunicorn+uvicorn workers.
+# Start wrapper for Beamup / Heroku-like platforms (pip-only environment)
 
 PORT="${PORT:-8888}"
 WORKERS="${WORKERS:-4}"
@@ -12,21 +11,10 @@ MAX_REQUESTS="${MAX_REQUESTS:-500}"
 MAX_REQUESTS_JITTER="${MAX_REQUESTS_JITTER:-200}"
 FORWARDED_ALLOW_IPS="${FORWARDED_ALLOW_IPS:-127.0.0.1}" # can be '*' if behind trusted proxy
 
-echo "[start] mediaflow-proxy starting on port ${PORT}..."
+echo "[start] mediaflow-proxy (pip mode) starting on port ${PORT}..."
 
-if [ ! -d ".venv" ]; then
-  echo "[start] Poetry virtualenv not found (.venv). Installing deps..."
-  poetry install --no-interaction --no-ansi --only main --no-root
-fi
-
-# Ensure we use the virtualenv python for all following operations (avoid system python)
-if [ -d ".venv/bin" ]; then
-  export VIRTUAL_ENV="$(pwd)/.venv"
-  export PATH="$VIRTUAL_ENV/bin:$PATH"
-fi
-
-# Quick module verification (non-fatal) using poetry run to guarantee venv context
-poetry run python - <<'PY' || true
+# Quick module verification (non-fatal)
+python - <<'PY' || true
 import importlib
 mods = [
   'fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil'
@@ -38,54 +26,27 @@ for m in mods:
   except Exception as e:
     missing.append(f"{m}:{e}")
 if missing:
-  print('[start][WARN] Missing modules in venv (continuo comunque):', ', '.join(missing))
+  print('[start][WARN] Missing modules (continuo comunque):', ', '.join(missing))
 else:
-  print('[start] All core Python modules present in venv')
+  print('[start] All core Python modules present')
 PY
-
-# If critical modules missing, attempt a targeted install (best-effort). Avoid importlib.util to prevent failures.
-MISSING=$(poetry run python - <<'PY'
-mods = ['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']
-missing=[]
-for m in mods:
-  try:
-    __import__(m)
-  except Exception:
-    missing.append(m)
-print(' '.join(missing))
-PY
-)
-if [ -n "$MISSING" ]; then
-  echo "[start] Attempting to install missing modules: $MISSING"
-  # Map bs4 -> beautifulsoup4, pydantic_settings -> pydantic-settings
-  FIXED=""
-  for pkg in $MISSING; do
-    case "$pkg" in
-      bs4) FIXED+=" beautifulsoup4";;
-      pydantic_settings) FIXED+=" pydantic-settings";;
-      *) FIXED+=" $pkg";;
-    esac
-  done
-  poetry run pip install --no-cache-dir $FIXED || echo "[start] Fallback install encountered errors"
-fi
 
 # If a password is set for API auth, hide it from logs
 if [ -n "${API_PASSWORD:-}" ]; then
   echo "[start] API auth enabled (API_PASSWORD set)"
 fi
 
-# Some platforms append extra args (e.g., '/start web'); filter unknown positional arguments
+# Filter platform-added args (e.g. 'web')
 SANITIZED_ARGS=()
 for arg in "$@"; do
   case "$arg" in
-    web|/start) # ignore these launcher artifacts
-      ;;
+    web|/start) ;;
     *) SANITIZED_ARGS+=("$arg");;
   esac
 done
 
 # Run gunicorn with uvicorn workers
-exec poetry run gunicorn mediaflow_proxy.main:app \
+exec gunicorn mediaflow_proxy.main:app \
   -w "${WORKERS}" \
   -k uvicorn.workers.UvicornWorker \
   --bind "0.0.0.0:${PORT}" \
