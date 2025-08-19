@@ -5,7 +5,8 @@ ENV PYTHONDONTWRITEBYTECODE="1"
 ENV PYTHONUNBUFFERED="1" \
     API_PASSWORD="mfp" \
     PYTHONDONTWRITEBYTECODE="1" \
-    PYTHONFAULTHANDLER="1"
+    PYTHONFAULTHANDLER="1" \
+    FORWARDED_ALLOW_IPS="*"
 
 ## Install system dependencies required for building wheels (lxml, cryptography, etc.)
 USER root
