@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Simple start wrapper for Beamup / Heroku-like platforms
+# Ensures poetry venv is ready, performs minimal diagnostics, then launches gunicorn+uvicorn workers.
+
+PORT="${PORT:-8888}"
+WORKERS="${WORKERS:-4}"
+LOG_LEVEL="${LOG_LEVEL:-info}"
+TIMEOUT="${TIMEOUT:-120}"
+MAX_REQUESTS="${MAX_REQUESTS:-500}"
+MAX_REQUESTS_JITTER="${MAX_REQUESTS_JITTER:-200}"
+FORWARDED_ALLOW_IPS="${FORWARDED_ALLOW_IPS:-127.0.0.1}" # can be '*' if behind trusted proxy
+
+echo "[start] mediaflow-proxy starting on port ${PORT}..."
+
+if [ ! -d ".venv" ]; then
+  echo "[start] Poetry virtualenv not found (.venv). Installing deps..."
+  poetry install --no-interaction --no-ansi --only main --no-root
+fi
+
+# Quick module verification (non-fatal)
+python - <<'PY' || true
+import importlib, sys
+mods = [
+  'fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil'
+]
+missing=[]
+for m in mods:
+  try:
+    importlib.import_module(m)
+  except Exception as e:
+    missing.append(f"{m}:{e}")
+if missing:
+  print('[start][WARN] Missing modules (continuo comunque):', ', '.join(missing))
+else:
+  print('[start] All core Python modules present')
+PY
+
+# If a password is set for API auth, hide it from logs
+if [ -n "${API_PASSWORD:-}" ]; then
+  echo "[start] API auth enabled (API_PASSWORD set)"
+fi
+
+# Run gunicorn with uvicorn workers
+exec poetry run gunicorn mediaflow_proxy.main:app \
+  -w "${WORKERS}" \
+  -k uvicorn.workers.UvicornWorker \
+  --bind "0.0.0.0:${PORT}" \
+  --timeout "${TIMEOUT}" \
+  --max-requests "${MAX_REQUESTS}" \
+  --max-requests-jitter "${MAX_REQUESTS_JITTER}" \
+  --log-level "${LOG_LEVEL}" \
+  --access-logfile - \
+  --error-logfile - \
+  --forwarded-allow-ips "${FORWARDED_ALLOW_IPS}" \
+  "$@"
