@@ -30,50 +30,50 @@ RUN chown -R mediaflow_proxy:mediaflow_proxy /mediaflow_proxy
 # Set up the PATH to include the user's local bin
 ENV PATH="/home/mediaflow_proxy/.local/bin:$PATH"
 
-ARG USE_POETRY=true
+## Copy requirement spec first (only requirements.txt used in pip mode)
+COPY requirements.txt /tmp/requirements.txt
 
-## Install Poetry only if requested (can skip to faster pip mode)
-RUN if [ "$USE_POETRY" = "true" ]; then pip install --no-cache-dir poetry; fi
+## Install Python dependencies (pip only)
+RUN pip install --no-cache-dir -r /tmp/requirements.txt \
+ && rm /tmp/requirements.txt
 
+## Copy project files (after deps)
+COPY . /mediaflow_proxy
+
+## Create non-root user after code present
+RUN useradd -m mediaflow_proxy || true \
+ && chown -R mediaflow_proxy:mediaflow_proxy /mediaflow_proxy
 USER mediaflow_proxy
 
-# Copy only requirements to cache them in docker layer
-COPY --chown=mediaflow_proxy:mediaflow_proxy pyproject.toml poetry.lock* /mediaflow_proxy/
-
-## Dependency installation
-COPY --chown=mediaflow_proxy:mediaflow_proxy requirements.txt /mediaflow_proxy/requirements.txt
-
-RUN if [ "$USE_POETRY" = "true" ]; then \
-        poetry config virtualenvs.in-project true && \
-        poetry install --no-interaction --no-ansi --no-root --only main && \
-        echo "[build] Poetry install completed"; \
-    else \
-        pip install --no-cache-dir -r requirements.txt && \
-        python -c "import importlib, sys; mods=['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']; missing=[m for m in mods if not importlib.util.find_spec(m)]; print('[build] Missing after pip install:', missing) if missing else print('[build] All runtime Python modules present (pip)'); sys.exit(1) if missing else None"; \
-    fi
-
-## Copy project files
-COPY --chown=mediaflow_proxy:mediaflow_proxy . /mediaflow_proxy
-
-## Build-time dependency verification (poetry variant)
-RUN if [ "$USE_POETRY" = "true" ]; then \
-        ./.venv/bin/python -c "import importlib, sys; mods=['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']; missing=[]; [missing.append(f'{m}:{e}') for m in mods try: importlib.import_module(m) except Exception as e]; print('[build][ERROR] Missing modules after poetry install:', ', '.join(missing)) if missing else print('[build] All runtime Python modules present (poetry)'); sys.exit(1) if missing else None"; \
-    fi
+## Build-time dependency verification
+RUN python - <<'PY'
+import importlib, sys
+mods=["fastapi","httpx","tenacity","xmltodict","pydantic_settings","gunicorn","uvicorn","tqdm","aiofiles","bs4","lxml","psutil"]
+missing=[]
+for m in mods:
+    try:
+        importlib.import_module(m)
+    except Exception as e:
+        missing.append(f"{m}:{e}")
+if missing:
+    print('[build][ERROR] Missing modules:', ', '.join(missing))
+    sys.exit(1)
+print('[build] All runtime Python modules present')
+PY
 
 # Expose the port the app runs on
 EXPOSE 8888
 
-# Copy start script (added later) and set executable
-COPY --chown=mediaflow_proxy:mediaflow_proxy start /mediaflow_proxy/start
+## Copy start script and set executable
+COPY start /mediaflow_proxy/start
 RUN chmod +x /mediaflow_proxy/start
 
 # Healthcheck (optional – attempts root path)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
-    CMD python -c "import os,urllib.request;port=os.getenv('PORT','8888');urllib.request.urlopen(f'http://127.0.0.1:{port}/proxy').read();print('OK')" 2>/dev/null || exit 1
+# NOTE: Must be a single line; previous multi-line broke parsing.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 CMD python -c "import os,urllib.request;port=os.getenv('PORT','8888');urllib.request.urlopen(f'http://127.0.0.1:{port}/proxy').read();print('OK')" 2>/dev/null || exit 1
 
 # Use dedicated start script; also copy a convenience symlink to /start for some PaaS
 USER root
-RUN ln -sf /mediaflow_proxy/start /start && chown mediaflow_proxy:mediaflow_proxy /start
+RUN ln -sf /mediaflow_proxy/start /start
 USER mediaflow_proxy
-
 ENTRYPOINT ["/mediaflow_proxy/start"]
