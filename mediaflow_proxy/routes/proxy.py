@@ -42,18 +42,28 @@ def sanitize_url(url: str) -> str:
     
     # First, try to process potential base64 encoded URLs
     url = process_potential_base64_url(url)
-    
-    # Fix malformed URLs where https%22// should be https://
-    url = re.sub(r'https%22//', 'https://', url)
-    url = re.sub(r'http%22//', 'http://', url)
-    
-    # Fix malformed URLs where https%3A%22// should be https://
-    url = re.sub(r'https%3A%22//', 'https://', url)
-    url = re.sub(r'http%3A%22//', 'http://', url)
-    
-    # Fix malformed URLs where https:"// should be https:// (after partial decoding)
-    url = re.sub(r'https:"//', 'https://', url)
-    url = re.sub(r'http:"//', 'http://', url)
+
+    # Detect and fix double-encoded URLs like https%253A%252F%252Fexample.com -> https%3A%2F%2Fexample.com -> https://example.com
+    if re.search(r'%25[0-9A-Fa-f]{2}', url):  # presence of '%25' indicates a second round of encoding
+        double_encoded_original = url
+        for _ in range(3):  # attempt multi-step decode (safeguard against infinite loop)
+            decoded_once = unquote(url)
+            if decoded_once == url:
+                break
+            url = decoded_once
+        if url != double_encoded_original:
+            logger.info(f"Double-encoded URL normalized: '{double_encoded_original}' -> '{url}'")
+    try:
+        decoded_url = unquote(url)
+        if decoded_url != url:
+            logger.info(f"URL after decoding: '{decoded_url}'")
+            # If after decoding we still have malformed protocol, fix it
+            if ':/"' in decoded_url:
+                fixed_decoded = re.sub(r'([a-z]+):"//', r'\1://', decoded_url)
+                logger.info(f"Fixed decoded URL: '{fixed_decoded}'")
+                return fixed_decoded
+    except Exception as e:
+        logger.warning(f"Error decoding URL '{url}': {e}")
     
     # Fix URLs where key_id and key parameters are incorrectly appended to the base URL
     # This happens when the URL contains &key_id= and &key= which should be handled as proxy parameters
