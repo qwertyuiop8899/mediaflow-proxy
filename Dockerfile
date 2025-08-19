@@ -64,9 +64,11 @@ PY
 # Expose the port the app runs on
 EXPOSE 8888
 
-## Copy start script and set executable
+## Copy start script and set executable (must be done as root to avoid permission issues on some builders)
+USER root
 COPY start /mediaflow_proxy/start
-RUN chmod +x /mediaflow_proxy/start
+RUN chmod 755 /mediaflow_proxy/start && chown mediaflow_proxy:mediaflow_proxy /mediaflow_proxy/start
+USER mediaflow_proxy
 
 # Healthcheck (optional – attempts root path)
 # NOTE: Must be a single line; previous multi-line broke parsing.
