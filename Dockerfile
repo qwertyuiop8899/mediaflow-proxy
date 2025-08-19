@@ -3,9 +3,9 @@ FROM python:3.13.5-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE="1"
 ENV PYTHONUNBUFFERED="1" \
-    PORT="8888" \
     API_PASSWORD="mfp" \
-    PYTHONDONTWRITEBYTECODE="1"
+    PYTHONDONTWRITEBYTECODE="1" \
+    PYTHONFAULTHANDLER="1"
 
 ## Install system dependencies required for building wheels (lxml, cryptography, etc.)
 USER root
@@ -61,7 +61,7 @@ if missing:
 print('[build] All runtime Python modules present')
 PY
 
-# Expose the port the app runs on
+# Expose default port (platform may override PORT env at runtime)
 EXPOSE 8888
 
 ## Copy start script and set executable (must be done as root to avoid permission issues on some builders)
@@ -72,7 +72,11 @@ USER mediaflow_proxy
 
 # Healthcheck (optional – attempts root path)
 # NOTE: Must be a single line; previous multi-line broke parsing.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 CMD python -c "import os,sys,httpx;port=os.getenv('PORT','8888');r=httpx.get(f'http://127.0.0.1:{port}/health',timeout=4);sys.exit(0 if r.status_code<400 else 1)" 2>/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 CMD python -c "import os,sys,urllib.request;port=os.getenv('PORT','8888');url=f'http://127.0.0.1:{port}/health';\
+    
+try:\
+    with urllib.request.urlopen(url,timeout=4) as r: sys.exit(0 if r.status<400 else 1)\
+except Exception as e: sys.exit(1)" 2>/dev/null || exit 1
 
 # Use dedicated start script; also copy a convenience symlink to /start for some PaaS
 USER root
