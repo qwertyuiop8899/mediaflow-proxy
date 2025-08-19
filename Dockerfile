@@ -39,8 +39,11 @@ COPY --chown=mediaflow_proxy:mediaflow_proxy start /mediaflow_proxy/start
 RUN chmod +x /mediaflow_proxy/start
 
 # Healthcheck (optional – attempts root path)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 CMD python -c "import sys,urllib.request;import os;port=os.getenv('PORT','8888');
-import json;urllib.request.urlopen(f'http://127.0.0.1:{port}/proxy').read();print('OK')" 2>/dev/null || exit 1
+# NOTE: Must be a single line; previous multi-line broke parsing.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 CMD python -c "import os,urllib.request;port=os.getenv('PORT','8888');urllib.request.urlopen(f'http://127.0.0.1:{port}/proxy').read();print('OK')" 2>/dev/null || exit 1
 
-# Use dedicated start script so Beamup (or other PaaS expecting /start) can invoke it
+# Use dedicated start script; also copy a convenience symlink to /start for some PaaS
+USER root
+RUN ln -sf /mediaflow_proxy/start /start && chown mediaflow_proxy:mediaflow_proxy /start
+USER mediaflow_proxy
 ENTRYPOINT ["/mediaflow_proxy/start"]
