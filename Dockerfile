@@ -2,9 +2,23 @@ FROM python:3.13.5-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE="1"
-ENV PYTHONUNBUFFERED="1"
-ENV PORT="8888"
-ENV API_PASSWORD="mfp"
+ENV PYTHONUNBUFFERED="1" \
+    PORT="8888" \
+    API_PASSWORD="mfp" \
+    PYTHONDONTWRITEBYTECODE="1"
+
+## Install system dependencies required for building wheels (lxml, cryptography, etc.)
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc \
+        git \
+        libxml2-dev \
+        libxslt1-dev \
+        zlib1g-dev \
+        libffi-dev \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set work directory
 WORKDIR /mediaflow_proxy
@@ -16,21 +30,30 @@ RUN chown -R mediaflow_proxy:mediaflow_proxy /mediaflow_proxy
 # Set up the PATH to include the user's local bin
 ENV PATH="/home/mediaflow_proxy/.local/bin:$PATH"
 
-# Switch to non-root user
+ARG USE_POETRY=true
+## Install Poetry only if requested (can skip to faster pip mode)
+RUN if [ "$USE_POETRY" = "true" ]; then pip install --no-cache-dir poetry; fi
 USER mediaflow_proxy
-
-# Install Poetry
-RUN pip install --user --no-cache-dir poetry
 
 # Copy only requirements to cache them in docker layer
 COPY --chown=mediaflow_proxy:mediaflow_proxy pyproject.toml poetry.lock* /mediaflow_proxy/
 
-# Project initialization:
-RUN poetry config virtualenvs.in-project true \
-    && poetry install --no-interaction --no-ansi --no-root --only main
+## Dependency installation
+COPY --chown=mediaflow_proxy:mediaflow_proxy requirements.txt /mediaflow_proxy/requirements.txt
+RUN if [ "$USE_POETRY" = "true" ]; then \
+            poetry config virtualenvs.in-project true && \
+            poetry install --no-interaction --no-ansi --no-root --only main && \
+            echo "[build] Poetry install completed"; \
+        else \
+            pip install --no-cache-dir -r requirements.txt && \
+            python - <<'PY' \nimport importlib, sys\nmods=['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']\nmissing=[m for m in mods if not importlib.util.find_spec(m)]\nprint('[build] Missing after pip install:' , missing) if missing else print('[build] All runtime Python modules present (pip)')\nPY\n; fi
 
-# Copy project files
+## Copy project files
 COPY --chown=mediaflow_proxy:mediaflow_proxy . /mediaflow_proxy
+
+## Build-time dependency verification (poetry variant)
+RUN if [ "$USE_POETRY" = "true" ]; then \
+    ./.venv/bin/python - <<'PY' \nimport importlib, sys\nmods=['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']\nmissing=[]\nfor m in mods:\n    try: importlib.import_module(m)\n    except Exception as e: missing.append(f"{m}:{e}")\nif missing: print('[build][ERROR] Missing modules after poetry install:', ', '.join(missing)) or sys.exit(1)\nprint('[build] All runtime Python modules present (poetry)')\nPY\n    ; fi
 
 # Expose the port the app runs on
 EXPOSE 8888
