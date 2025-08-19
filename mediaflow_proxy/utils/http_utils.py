@@ -491,6 +491,12 @@ def get_proxy_headers(request: Request) -> ProxyRequestHeaders:
     request_headers = {k: v for k, v in request.headers.items() if k in SUPPORTED_REQUEST_HEADERS}
     request_headers.update({k[2:].lower(): v for k, v in request.query_params.items() if k.startswith("h_")})
     response_headers = {k[2:].lower(): v for k, v in request.query_params.items() if k.startswith("r_")}
+    # Provide a modern default User-Agent if the client didn't send one; some CDNs block generic clients
+    if "user-agent" not in request_headers:
+        request_headers["user-agent"] = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
     return ProxyRequestHeaders(request_headers, response_headers)
 
 
