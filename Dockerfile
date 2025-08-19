@@ -40,24 +40,23 @@ COPY --chown=mediaflow_proxy:mediaflow_proxy pyproject.toml poetry.lock* /mediaf
 
 ## Dependency installation
 COPY --chown=mediaflow_proxy:mediaflow_proxy requirements.txt /mediaflow_proxy/requirements.txt
-RUN bash -c '
-if [ "$USE_POETRY" = "true" ]; then
+RUN bash -c ' \
+if [ "$USE_POETRY" = "true" ]; then \
     poetry config virtualenvs.in-project true && \
     poetry install --no-interaction --no-ansi --no-root --only main && \
-    echo "[build] Poetry install completed"
-else
+    echo "[build] Poetry install completed"; \
+else \
     pip install --no-cache-dir -r requirements.txt && \
-    python - <<PY
-import importlib, sys
-mods=["fastapi","httpx","tenacity","xmltodict","pydantic_settings","gunicorn","uvicorn","tqdm","aiofiles","bs4","lxml","psutil"]
-missing=[m for m in mods if not importlib.util.find_spec(m)]
-if missing:
-    print("[build] Missing after pip install:", missing)
-    sys.exit(1)
-print("[build] All runtime Python modules present (pip)")
-PY
-fi
-'
+    python - <<PY \
+import importlib, sys \
+mods=["fastapi","httpx","tenacity","xmltodict","pydantic_settings","gunicorn","uvicorn","tqdm","aiofiles","bs4","lxml","psutil"] \
+missing=[m for m in mods if not importlib.util.find_spec(m)] \
+if missing: \
+    print("[build] Missing after pip install:", missing) \
+    sys.exit(1) \
+print("[build] All runtime Python modules present (pip)") \
+PY \
+fi'
 
 ## Copy project files
 COPY --chown=mediaflow_proxy:mediaflow_proxy . /mediaflow_proxy
