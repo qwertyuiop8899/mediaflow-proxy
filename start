@@ -12,6 +12,9 @@ MAX_REQUESTS_JITTER="${MAX_REQUESTS_JITTER:-200}"
 FORWARDED_ALLOW_IPS="${FORWARDED_ALLOW_IPS:-127.0.0.1}" # can be '*' if behind trusted proxy
 
 echo "[start] mediaflow-proxy (pip mode) starting on port ${PORT}..."
+if [ $# -gt 0 ]; then
+  echo "[start] Raw incoming args: $*"
+fi
 
 # Quick module verification (non-fatal)
 python - <<'PY' || true
