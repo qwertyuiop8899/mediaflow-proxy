@@ -41,19 +41,42 @@ COPY --chown=mediaflow_proxy:mediaflow_proxy pyproject.toml poetry.lock* /mediaf
 ## Dependency installation
 COPY --chown=mediaflow_proxy:mediaflow_proxy requirements.txt /mediaflow_proxy/requirements.txt
 RUN if [ "$USE_POETRY" = "true" ]; then \
-            poetry config virtualenvs.in-project true && \
-            poetry install --no-interaction --no-ansi --no-root --only main && \
-            echo "[build] Poetry install completed"; \
-        else \
-            pip install --no-cache-dir -r requirements.txt && \
-            python - <<'PY' \nimport importlib, sys\nmods=['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']\nmissing=[m for m in mods if not importlib.util.find_spec(m)]\nprint('[build] Missing after pip install:' , missing) if missing else print('[build] All runtime Python modules present (pip)')\nPY\n; fi
+        poetry config virtualenvs.in-project true && \
+        poetry install --no-interaction --no-ansi --no-root --only main && \
+        echo "[build] Poetry install completed"; \
+    else \
+        pip install --no-cache-dir -r requirements.txt && \
+        python - <<'PY'
+import importlib, sys
+mods=['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']
+missing=[m for m in mods if not importlib.util.find_spec(m)]
+if missing:
+    print('[build] Missing after pip install:', missing)
+    sys.exit(1)
+print('[build] All runtime Python modules present (pip)')
+PY
+    ; fi
 
 ## Copy project files
 COPY --chown=mediaflow_proxy:mediaflow_proxy . /mediaflow_proxy
 
 ## Build-time dependency verification (poetry variant)
 RUN if [ "$USE_POETRY" = "true" ]; then \
-    ./.venv/bin/python - <<'PY' \nimport importlib, sys\nmods=['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']\nmissing=[]\nfor m in mods:\n    try: importlib.import_module(m)\n    except Exception as e: missing.append(f"{m}:{e}")\nif missing: print('[build][ERROR] Missing modules after poetry install:', ', '.join(missing)) or sys.exit(1)\nprint('[build] All runtime Python modules present (poetry)')\nPY\n    ; fi
+    ./.venv/bin/python - <<'PY'
+import importlib, sys
+mods=['fastapi','httpx','tenacity','xmltodict','pydantic_settings','gunicorn','uvicorn','tqdm','aiofiles','bs4','lxml','psutil']
+missing=[]
+for m in mods:
+    try:
+        importlib.import_module(m)
+    except Exception as e:
+        missing.append(f"{m}:{e}")
+if missing:
+    print('[build][ERROR] Missing modules after poetry install:', ', '.join(missing))
+    sys.exit(1)
+print('[build] All runtime Python modules present (poetry)')
+PY
+    ; fi
 
 # Expose the port the app runs on
 EXPOSE 8888
