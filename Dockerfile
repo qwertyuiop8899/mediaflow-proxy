@@ -48,7 +48,7 @@ USER mediaflow_proxy
 ## Build-time dependency verification
 RUN python - <<'PY'
 import importlib, sys
-mods=["fastapi","httpx","tenacity","xmltodict","pydantic_settings","gunicorn","uvicorn","tqdm","aiofiles","bs4","lxml","psutil"]
+mods=["fastapi","httpx","tenacity","xmltodict","pydantic_settings","gunicorn","uvicorn","tqdm","aiofiles","bs4","lxml","psutil","Crypto"]
 missing=[]
 for m in mods:
     try:
