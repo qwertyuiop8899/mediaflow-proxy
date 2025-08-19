@@ -36,14 +36,21 @@ if [ -n "${API_PASSWORD:-}" ]; then
   echo "[start] API auth enabled (API_PASSWORD set)"
 fi
 
-# Filter platform-added args (e.g. 'web')
+# Filter platform-added args (e.g. 'web', '/start', full paths) and log if any removed
 SANITIZED_ARGS=()
+REMOVED_ARGS=()
 for arg in "$@"; do
   case "$arg" in
-    web|/start) ;;
+    web|/start|start|*/start) REMOVED_ARGS+=("$arg");;
     *) SANITIZED_ARGS+=("$arg");;
   esac
 done
+if [ ${#REMOVED_ARGS[@]} -gt 0 ]; then
+  echo "[start] Removed platform args: ${REMOVED_ARGS[*]}"
+fi
+if [ ${#SANITIZED_ARGS[@]} -gt 0 ]; then
+  echo "[start] Forwarding extra args to gunicorn: ${SANITIZED_ARGS[*]}"
+fi
 
 # Run gunicorn with uvicorn workers
 exec gunicorn mediaflow_proxy.main:app \
